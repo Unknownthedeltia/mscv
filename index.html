@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>未完都市(νMSCV)</title>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="favicon.png?v=2">
+    
+    <!-- Libraries -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Zen+Kaku+Gothic+New:wght@400;700;900&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <!-- GSAP -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/TextPlugin.min.js"></script>
+
+    <!-- Tailwind Config -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        void: '#050505',
+                        neon: '#a855f7', // 精神性を表す紫
+                        acid: '#22d3ee', // デジタルなシアン
+                        alert: '#ef4444', // 警告の赤
+                        mikan: '#f97316', // みかん色（特異点用）
+                    },
+                    fontFamily: {
+                        mono: ['"JetBrains Mono"', 'monospace'],
+                        sans: ['"Zen Kaku Gothic New"', 'sans-serif'],
+                    },
+                    backgroundImage: {
+                        'grid-pattern': "linear-gradient(rgba(34, 211, 238, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(34, 211, 238, 0.05) 1px, transparent 1px)",
+                        'cyber-gradient': "linear-gradient(to bottom, transparent, rgba(168, 85, 247, 0.1))",
+                    }
+                }
+            }
+        }
+
+        
+    </script>
+
+    <style>
+        body {
+            background-color: #050505;
+            color: #e5e7eb;
+            overflow-x: hidden;
+            cursor: none;
+            scroll-behavior: smooth;
+        }
+
+        /* 空間座標グリッド */
+        .bg-grid {
+            background-size: 40px 40px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* ターミナルカーソル */
+        #cursor {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 24px;
+            height: 24px;
+            border: 1px solid #22d3ee;
+            background: rgba(34, 211, 238, 0.05);
+            pointer-events: none;
+            z-index: 9999;
+            transform: translate(-50%, -50%);
+            mix-blend-mode: difference;
+            transition: width 0.2s, height 0.2s, background-color 0.2s, border-radius 0.2s;
+            border-radius: 50%;
+        }
+        #cursor.hovered {
+            width: 60px;
+            height: 60px;
+            background-color: rgba(168, 85, 247, 0.2);
+            border-color: #a855f7;
+            border-radius: 4px; /* ホバー時は四角形に */
+            transform: translate(-50%, -50%) rotate(45deg);
+        }
+        #cursor::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 4px;
+            height: 4px;
+            background: #22d3ee;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        /* スキャンラインエフェクト */
+        .scanlines {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,0,0,0.25) 50%, rgba(0,0,0,0.25));
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 9000;
+            opacity: 0.3;
+        }
+
+        /* データライン（装飾） */
+        .data-line {
+            width: 1px;
+            background: linear-gradient(to bottom, transparent, #22d3ee, transparent);
+            animation: data-flow 3s infinite linear;
+        }
+        @keyframes data-flow {
+            0% { transform: translateY(-100%); opacity: 0;}
+            50% { opacity: 1; }
+            100% { transform: translateY(100%); opacity: 0;}
+        }
+
+        /* スクロールバー */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #050505; border-left: 1px solid rgba(34, 211, 238, 0.1); }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #22d3ee; }
+        
+        /* ガラスモジュラーパネル */
+        .glass-panel {
+            background: rgba(10, 10, 12, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(34, 211, 238, 0.1);
+            position: relative;
+            transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+        .glass-panel::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 10px; height: 10px;
+            border-top: 1px solid #22d3ee;
+            border-left: 1px solid #22d3ee;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .glass-panel::after {
+            content: '';
+            position: absolute;
+            bottom: 0; right: 0; width: 10px; height: 10px;
+            border-bottom: 1px solid #a855f7;
+            border-right: 1px solid #a855f7;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .glass-panel:hover {
+            border-color: rgba(34, 211, 238, 0.4);
+            box-shadow: 0 10px 30px -10px rgba(34, 211, 238, 0.15);
+            transform: translateY(-4px);
+        }
+        .glass-panel:hover::before, .glass-panel:hover::after {
+            opacity: 1;
+        }
+        
+        /* 画像プレースホルダー */
+        .img-fallback {
+            background: repeating-linear-gradient(
+                45deg,
+                #111,
+                #111 10px,
+                #1a1a1a 10px,
+                #1a1a1a 20px
+            );
+        }
+    </style>
+</head>
+<body class="font-sans antialiased selection:bg-acid selection:text-black">
+
+    <!-- System Overlays -->
+    <div id="cursor"></div>
+    <div class="scanlines"></div>
+    <div class="bg-grid bg-grid-pattern"></div>
+    
+    <!-- サイドデータライン -->
+    <div class="fixed left-4 top-0 h-full w-[1px] bg-white/5 z-0 hidden md:block">
+        <div class="data-line h-1/3"></div>
+    </div>
+    <div class="fixed right-4 top-0 h-full w-[1px] bg-white/5 z-0 hidden md:block">
+        <div class="data-line h-1/4" style="animation-delay: 1.5s;"></div>
+    </div>
+
+    <!-- グローバルナビゲーション・モジュール -->
+    <header class="fixed top-0 left-0 w-full z-50 pointer-events-none mix-blend-plus-lighter">
+        <nav class="container mx-auto px-6 py-6 flex justify-between items-center pointer-events-auto bg-gradient-to-b from-void/90 via-void/80 to-transparent backdrop-blur-md border-b border-acid/10">
+            <a href="#top" class="text-xl md:text-2xl font-mono font-bold hover-trigger group flex items-center gap-3">
+                <div class="w-8 h-8 relative flex items-center justify-center">
+                    <div class="absolute inset-0 border border-acid/50 group-hover:rotate-180 transition-transform duration-700"></div>
+                    <div class="w-4 h-4 bg-neon/80 group-hover:scale-75 transition-transform"></div>
+                </div>
+                <span>νMSCV<span class="text-acid animate-pulse">_</span>未完都市</span>
+            </a>
+            
+            <div class="hidden md:flex space-x-10 font-mono text-xs tracking-[0.2em] text-gray-400">
+                <a href="#about" class="hover:text-acid transition-colors hover-trigger relative group">
+                    <span class="absolute -left-3 opacity-0 group-hover:opacity-100 text-acid transition-opacity">></span>
+                    CONCEPT
+                </a>
+                <a href="#structure" class="hover:text-acid transition-colors hover-trigger relative group">
+                    <span class="absolute -left-3 opacity-0 group-hover:opacity-100 text-acid transition-opacity">></span>
+                    CITY_PLAN
+                </a>
+                <a href="#events" class="hover:text-acid transition-colors hover-trigger relative group">
+                    <span class="absolute -left-3 opacity-0 group-hover:opacity-100 text-acid transition-opacity">></span>
+                    BROADCAST
+                </a>
+                <a href="#admin" class="hover:text-acid transition-colors hover-trigger relative group">
+                    <span class="absolute -left-3 opacity-0 group-hover:opacity-100 text-acid transition-opacity">></span>
+                    ADMIN
+                </a>
+            </div>
+
+            <!-- 参加ボタン (Mobile: Icon, PC: Text) -->
+            <a href="#join" class="hover-trigger flex items-center gap-2 border border-neon/50 px-4 py-2 text-neon text-xs font-mono hover:bg-neon hover:text-black transition-all">
+                <span class="hidden md:inline">INITIALIZE_CONNECTION</span>
+                <i class="ph ph-plug-charging text-lg"></i>
+            </a>
+        </nav>
+    </header>
+
+    <main class="relative z-10">
+        <!-- ==========================================
+             HERO SECTION: ターミナル起動シーケンス
+             ========================================== -->
+        <section id="top" class="relative min-h-screen flex flex-col justify-center items-center overflow-hidden pt-20">
+            <!-- アンビエント照明 -->
+            <div class="absolute inset-0 z-0 opacity-20 pointer-events-none flex justify-center items-center">
+                <div class="w-[800px] h-[800px] bg-acid/20 rounded-full blur-[200px] animate-pulse"></div>
+            </div>
+
+            <div class="z-10 text-center px-4 relative w-full max-w-5xl mx-auto flex flex-col items-center">
+                
+                <!-- システムステータス表示 -->
+                <div class="font-mono text-neon mb-12 text-xs tracking-[0.5em] border border-neon/30 py-2 px-6 inline-block bg-void/80 backdrop-blur shadow-[0_0_15px_rgba(168,85,247,0.2)]">
+                    <span id="scramble-text">ESTABLISHING_SECURE_LINK...</span>
+                </div>
+                
+                <!-- 中央ロゴエリア -->
+                <div class="relative w-48 h-48 md:w-64 md:h-64 mb-8 group hover-trigger reveal-hero">
+                    <!-- ロゴ装飾フレーム -->
+                    <div class="absolute -inset-4 border-2 border-dashed border-acid/20 rounded-full animate-[spin_20s_linear_infinite]"></div>
+                    <div class="absolute -inset-8 border border-neon/10 rounded-full animate-[spin_15s_linear_infinite_reverse]"></div>
+                    
+                    <!-- ロゴ画像配置箇所 -->
+                    <div class="w-full h-full rounded-full overflow-hidden relative flex items-center justify-center">
+                        <img src="nmscv/logo.png" onerror="this.src='https://placehold.co/400x400/050505/22d3ee?text=νMSCV\\nLOGO'" alt="未完都市 ロゴ" class="w-full h-full object-contain filter drop-shadow-[0_0_10px_rgba(34,211,238,0.5)] group-hover:scale-110 transition-transform duration-700 mix-blend-screen">
+                    </div>
+                </div>
+
+                <!-- メインタイトル -->
+                <h1 class="text-4xl md:text-7xl lg:text-8xl font-black font-sans leading-none mb-4 tracking-tight text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.2)] reveal-title">
+                    未完都市
+                </h1>
+                
+                <!-- サブタイトル（英語） --> 
+                <!-- UNFINISHED METROPOLISとMega Scramble Crossing Villageどっちのほうがいいんだ？？？？-->
+                <div class="text-acid text-xl md:text-3xl font-mono tracking-[0.3em] opacity-0 reveal-hero-text">
+                     <span class="text-neon">ν Mega Scramble Crossing Village (νMSCV)</span>
+                </div>
+                
+                <!-- スクロールダウンインジケーター -->
+                <div class="absolute bottom-12 left-1/2 transform -translate-x-1/2 flex flex-col items-center gap-4 opacity-70">
+                    <span class="font-mono text-xs text-gray-500 tracking-widest writing-vertical-rl rotate-180">ACCESS_CITY_DATA</span>
+                    <div class="h-16 w-[1px] bg-gradient-to-b from-transparent via-acid to-transparent animate-[data-flow_2s_infinite]"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==========================================
+             CONCEPT SECTION: 都市の基本理念
+             ========================================== -->
+        <section id="about" class="py-32 relative border-t border-acid/10 bg-cyber-gradient">
+            <div class="container mx-auto px-6 max-w-6xl">
+                <!-- セクションヘッダー -->
+                <div class="flex items-center gap-4 mb-16 border-b border-white/10 pb-6 reveal-up">
+                    <div class="w-12 h-1 bg-acid"></div>
+                    <h2 class="text-3xl md:text-5xl font-mono font-bold text-white tracking-widest">
+                        CONCEPT<span class="text-acid">_</span>
+                    </h2>
+                    <span class="text-gray-600 font-mono text-sm ml-auto">DATA_BLOCK_01</span>
+                </div>
+
+                <div class="grid md:grid-cols-12 gap-12 items-center">
+                    <!-- 左側：大きなテキスト演出 -->
+                    <div class="md:col-span-5 reveal-left relative">
+                        <div class="absolute -left-10 -top-10 text-9xl text-white/5 font-black select-none pointer-events-none font-mono">
+                            BUILD<br>THE<br>CITY
+                        </div>
+                        <h3 class="text-3xl md:text-4xl font-bold mb-6 font-sans leading-tight relative z-10 text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400">
+                            新しいアイデアと<br>
+                            人のつながりで、<br>
+                            <span class="text-acid">街を作る。</span>
+                        </h3>
+                    </div>
+                    
+                    <!-- 右側：詳細説明文 -->
+                    <div class="md:col-span-7 reveal-right glass-panel p-8 md:p-12 relative overflow-hidden">
+                        <!-- 装飾的な背景記号 -->
+                        <i class="ph ph-buildings text-[200px] absolute -right-10 -bottom-10 text-white/5 rotate-12"></i>
+                        
+                        <div class="relative z-10 space-y-6 text-gray-300 text-lg leading-relaxed font-sans font-light">
+                            <p>
+                                「未完都市(νMSCV)」は、単なるチャットサーバーではありません。チャンネル構造そのものを<strong class="text-neon font-bold">「都市設計」</strong>に見立てた、全く新しいコミュニティ運営モデルです。
+                            </p>
+                            <p>
+                                趣味への深い探求と、住民同士の偶発的な交流。その二つのバランスを極限まで追求し、拡張性の高いシステムとして構築されています。
+                            </p>
+                            <div class="flex items-center gap-3 text-sm font-mono text-acid bg-acid/10 p-4 border-l-2 border-acid mt-8">
+                                <i class="ph ph-info flex-shrink-0 text-xl"></i>
+                                <p>この都市は完成することはありません。状況やメンバーの変化に応じて、常に拡張・再構成され続ける「動的モデル」です。</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==========================================
+             STRUCTURE SECTION: 都市計画図（チャンネル構造）
+             ========================================== -->
+        <section id="structure" class="py-32 bg-void relative border-t border-acid/10 overflow-hidden">
+            <!-- 背景の巨大な歯車やネットワークの装飾 -->
+            <div class="absolute top-1/2 left-0 transform -translate-y-1/2 -translate-x-1/4 opacity-5 pointer-events-none">
+                <i class="ph ph-hexagon text-[800px] text-neon animate-[spin_60s_linear_infinite]"></i>
+            </div>
+
+            <div class="container mx-auto px-6 max-w-7xl relative z-10">
+                <div class="flex items-center justify-end gap-4 mb-16 border-b border-white/10 pb-6 reveal-up">
+                    <span class="text-gray-600 font-mono text-sm mr-auto">DATA_BLOCK_02</span>
+                    <h2 class="text-3xl md:text-5xl font-mono font-bold text-white tracking-widest text-right">
+                        CITY_PLAN<span class="text-neon">_</span>
+                    </h2>
+                    <div class="w-12 h-1 bg-neon"></div>
+                </div>
+
+                <!-- 変更箇所：グリッドレイアウトを廃止し、flex-colで縦並びに変更 -->
+                <div class="flex flex-col gap-16 items-center">
+                    
+                    <!-- 上側：構造図の画像展示 -->
+                    <!-- アニメーションをreveal-upに変更し、画像が最大限広がるように設定 -->
+                    <div class="relative reveal-up group hover-trigger w-full">
+                        <div class="absolute -inset-1 bg-gradient-to-r from-acid to-neon rounded-lg blur opacity-25 group-hover:opacity-50 transition duration-1000"></div>
+                        <div class="relative bg-black border border-gray-800 rounded-lg overflow-hidden p-2 aspect-[16/9] md:aspect-auto">
+                            <!-- スキャナーエフェクトのライン -->
+                            <div class="absolute top-0 left-0 w-full h-[2px] bg-acid/50 shadow-[0_0_10px_#22d3ee] z-20 animate-[scan_4s_ease-in-out_infinite]"></div>
+                            
+                            <!-- 指定された構造図の画像 -->
+                            <img src="nmscv/project1.png" onerror="this.src='https://placehold.co/1920x1080/111/444?text=STRUCTURAL+MAP+NOT+FOUND'" alt="未完都市 構造図" class="w-full h-full object-cover filter contrast-125 brightness-90 group-hover:brightness-110 transition-all duration-500">
+                            
+                            <!-- 画像上のオーバーレイ情報 -->
+                            <div class="absolute bottom-4 right-4 bg-black/80 backdrop-blur border border-white/10 px-3 py-1 font-mono text-xs text-acid">
+                                FIG 1: SCHEMATIC_DIAGRAM
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 下側：各区画の解説テキスト -->
+                    <!-- アニメーションをreveal-upに変更し、最大幅を設定して読みやすさを確保 -->
+                    <div class="space-y-8 reveal-up w-full max-w-4xl">
+                        <p class="text-gray-400 font-sans leading-relaxed text-lg mb-8">
+                            当サーバーは、住民が「住みやすく」「話しやすく」「遊びやすい」環境を維持するため、空間を論理的に分割・接続しています。
+                        </p>
+
+                        <!-- 解説項目リスト（デザインは一切変更せず維持） -->
+                        <div class="relative border-l border-gray-800 ml-4 pl-8 space-y-10">
+                            
+                            <!-- 共用居住区 -->
+                            <div class="relative group">
+                                <div class="absolute -left-[37px] top-1 w-4 h-4 rounded-full bg-void border-2 border-white group-hover:border-acid group-hover:scale-125 transition-all duration-300"></div>
+                                <h4 class="text-xl md:text-2xl font-bold font-sans text-white mb-2 flex items-center gap-2">
+                                    <i class="ph ph-buildings text-acid"></i> 中央: 共用居住区
+                                </h4>
+                                <p class="text-gray-400 text-sm md:text-base leading-relaxed">
+                                    都市の心臓部たる共通ロビー・公共広場です。市民権（ロール）を持つ全ユーザーがアクセス可能なメインストリートであり、重要なお知らせや全体雑談、各所への導線として機能します。
+                                </p>
+                            </div>
+
+                            <!-- 趣味チャンネル -->
+                            <div class="relative group">
+                                <div class="absolute -left-[37px] top-1 w-4 h-4 rounded-full bg-void border-2 border-gray-600 group-hover:border-neon group-hover:scale-125 transition-all duration-300"></div>
+                                <h4 class="text-xl md:text-2xl font-bold font-sans text-white mb-2 flex items-center gap-2">
+                                    <i class="ph ph-palette text-neon"></i> 周囲: [h] 趣味チャンネル群
+                                </h4>
+                                <p class="text-gray-400 text-sm md:text-base leading-relaxed">
+                                    （例：hA, hB, hC...）共通の関心事を持つ人々が集う専門区画です。「創作」「音楽」「技術」など、特定分野の深い交流を目的とし、隣接する関連分野とは後述の居住区を通じて有機的に接続されます。
+                                </p>
+                            </div>
+
+                            <!-- 居住区・動線チャンネル -->
+                            <div class="relative group">
+                                <div class="absolute -left-[37px] top-1 w-4 h-4 rounded-full bg-void border-2 border-gray-600 group-hover:border-acid group-hover:scale-125 transition-all duration-300"></div>
+                                <h4 class="text-xl md:text-2xl font-bold font-sans text-white mb-2 flex items-center gap-2">
+                                    <i class="ph ph-path text-acid"></i> 接続: [l] 居住区・動線チャンネル
+                                </h4>
+                                <p class="text-gray-400 text-sm md:text-base leading-relaxed">
+                                    （例：l1, l2, l3...）市民の実際の活動拠点であり、専門区画[h]と中央広場を結ぶ大動脈です。物理的な配置によって「交流の心理的距離感」を可視化し、自然な人の流れを生み出します。
+                                </p>
+                            </div>
+
+                            <!-- 特異チャンネル -->
+                            <div class="relative group mt-12 bg-gray-900/50 p-6 border border-gray-800 rounded-lg hover:border-mikan transition-colors">
+                                <div class="absolute -left-[61px] top-8 w-4 h-4 rounded-none bg-void border-2 border-mikan rotate-45 group-hover:bg-mikan shadow-[0_0_10px_#f97316] transition-all duration-300"></div>
+                                <h4 class="text-xl md:text-2xl font-bold font-sans text-mikan mb-2 flex items-center gap-2">
+                                    <span class="text-2xl">🍊</span> 特異領域: 副共用居住区
+                                </h4>
+                                <p class="text-gray-400 text-sm md:text-base leading-relaxed">
+                                    基本構造から意図的に隔離されたパラレルワールド。ギャグ、メタ発言、理不尽な構造、その他「通常の都市計画にそぐわない」要素の検疫・隔離区画です。くだらないネタの墓場となるか、あるいは天啓が降りる聖地となるか。
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==========================================
+             EVENTS SECTION: 未完放送局
+             ========================================== -->
+        <section id="events" class="py-32 relative border-t border-acid/10 bg-void">
+            <!-- デジタルノイズ背景 -->
+            <div class="absolute inset-0 opacity-5" style="background-image: url('data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noiseFilter%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.65%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noiseFilter)%22/%3E%3C/svg%3E');"></div>
+
+            <div class="container mx-auto px-6 max-w-6xl relative z-10">
+                <div class="flex items-center gap-4 mb-16 border-b border-white/10 pb-6 reveal-up">
+                    <div class="w-12 h-1 bg-white"></div>
+                    <h2 class="text-3xl md:text-5xl font-mono font-bold text-white tracking-widest">
+                        BROADCAST<span class="text-white animate-pulse">_</span>
+                    </h2>
+                    <span class="text-gray-600 font-mono text-sm ml-auto">DATA_BLOCK_03</span>
+                </div>
+
+                <!-- 放送局カード -->
+                <div class="glass-panel p-2 reveal-up group hover-trigger max-w-4xl mx-auto flex flex-col md:flex-row gap-0 overflow-hidden rounded-xl border-gray-800">
+                    
+                    <!-- サムネイル領域 -->
+                    <div class="md:w-1/2 relative overflow-hidden aspect-video md:aspect-auto img-fallback">
+                        <img src="nmscv/みかんちゃん待機2.png" onerror="this.src='https://placehold.co/800x600/111/fff?text=RADIO+THUMBNAIL'" alt="未完放送局 サムネイル" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700">
+                        <div class="absolute inset-0 bg-gradient-to-t md:bg-gradient-to-r from-black via-black/50 to-transparent"></div>
+                        
+                        <!-- ON AIR バッジ -->
+                        <div class="absolute top-4 left-4 flex items-center gap-2 bg-red-600/20 border border-red-500 text-red-500 px-3 py-1 font-mono text-xs rounded-full backdrop-blur">
+                            <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                            ON AIR
+                        </div>
+                    </div>
+
+                    <!-- コンテンツ領域 -->
+                    <div class="md:w-1/2 p-8 md:p-10 flex flex-col justify-center bg-black/80">
+                        <span class="font-mono text-xs text-acid mb-3 block tracking-widest">WEEKLY_EVENT</span>
+                        <h3 class="text-3xl md:text-4xl font-bold font-sans text-white mb-4 group-hover:text-acid transition-colors">
+                            未完放送局
+                        </h3>
+                        <p class="text-gray-400 font-sans mb-6 text-sm md:text-base leading-relaxed border-l-2 border-gray-800 pl-4">
+                            都市の片隅から発信される電波ジャック。毎週土曜または日曜に、市民の皆様へ向けてプログラムをお届けしています。
+                        </p>
+                        
+                        <div class="space-y-4 font-mono text-sm mb-8">
+                            <div class="flex items-center gap-3 text-gray-300">
+                                <i class="ph ph-calendar-blank text-neon text-xl"></i>
+                                <span>SCHEDULE: Every Saturday or Sunday</span>
+                            </div>
+                            <div class="flex items-center gap-3 text-gray-300">
+                                <i class="ph ph-hash text-acid text-xl"></i>
+                                <span>X_TAG: <a href="https://twitter.com/search?q=%23%E6%9C%AA%E5%AE%8C%E6%94%BE%E9%80%81%E5%B1%80" target="_blank" class="text-white hover:text-acid underline decoration-dashed underline-offset-4 transition-colors">#未完放送局</a></span>
+                            </div>
+                        </div>
+
+                        <!-- お便りフォームリンク -->
+                        <a href="https://docs.google.com/forms/d/e/1FAIpQLSduU9EdM1WV8kISl2MQtlyi8TsqZpi2qtq9ZcYEFqCPpY4Yog/viewform" target="_blank" class="inline-flex items-center justify-between bg-white text-black px-6 py-4 font-bold font-sans hover:bg-acid hover:text-black transition-colors duration-300 relative overflow-hidden group/btn">
+                            <span class="relative z-10 flex items-center gap-2">
+                                <i class="ph ph-envelope-simple text-xl"></i> お便りを送る
+                            </span>
+                            <i class="ph ph-arrow-right relative z-10 transform group-hover/btn:translate-x-2 transition-transform"></i>
+                            <div class="absolute inset-0 bg-acid transform scale-x-0 origin-left group-hover/btn:scale-x-100 transition-transform duration-300 ease-out"></div>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==========================================
+             ADMIN SECTION: 運営メンバー
+             ========================================== -->
+        <section id="admin" class="py-32 relative border-t border-acid/10 bg-cyber-gradient">
+            <div class="container mx-auto px-6 max-w-6xl">
+                <div class="flex items-center justify-end gap-4 mb-16 border-b border-white/10 pb-6 reveal-up">
+                    <span class="text-gray-600 font-mono text-sm mr-auto">DATA_BLOCK_04</span>
+                    <h2 class="text-3xl md:text-5xl font-mono font-bold text-white tracking-widest text-right">
+                        ADMIN<span class="text-neon">_</span>
+                    </h2>
+                    <div class="w-12 h-1 bg-neon"></div>
+                </div>
+
+                <!-- メンバーグリッド（今後追加しやすい構造） -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    
+                    <!-- サーバー主 Aさん -->
+                     <a href="index.html" target="_blank" >
+                    <div class="glass-panel p-6 flex items-center gap-6 reveal-card hover-trigger group">
+                        <!-- アイコン -->
+                        <div class="relative w-24 h-24 flex-shrink-0">
+                            <div class="absolute inset-0 border-2 border-neon/30 rounded-full group-hover:rotate-90 transition-transform duration-500"></div>
+                            <img src="nmscv/mikanchan.png" onerror="this.src='https://placehold.co/200x200/111/a855f7?text=A'" alt="Metalepsis_" class="w-full h-full object-cover rounded-full p-1 grayscale group-hover:grayscale-0 transition-all duration-300">
+                        </div>
+                        <!-- 情報 -->
+                        <div>
+                            <div class="inline-block bg-neon/20 text-neon font-mono text-[10px] px-2 py-0.5 border border-neon/50 mb-2">
+                                SYSTEM_ROOT
+                            </div>
+                            <h3 class="text-2xl font-bold font-sans text-white mb-1 group-hover:text-neon transition-colors">Metalepsis_</h3>
+                            <p class="text-gray-400 text-sm font-sans">サーバー主 / 都市の創設者</p>
+                        </div>
+                    </div>
+                    </a>
+
+                    <!-- サーバー管理者 Bさん -->
+                    <a href="https://sites.google.com/view/avagu/" target="_blank">
+                    <div class="glass-panel p-6 flex items-center gap-6 reveal-card hover-trigger group" style="transition-delay: 100ms;">
+                        <!-- アイコン -->
+                        <div class="relative w-24 h-24 flex-shrink-0">
+                            <div class="absolute inset-0 border-2 border-acid/30 rounded-full group-hover:-rotate-90 transition-transform duration-500"></div>
+                            <img src="nmscv/Entity.jpg" onerror="this.src='https://placehold.co/200x200/111/22d3ee?text=B'" alt="Entity" class="w-full h-full object-cover rounded-full p-1 grayscale group-hover:grayscale-0 transition-all duration-300">
+                        </div>
+                        <!-- 情報 -->
+                        <div>
+                            <div class="inline-block bg-acid/20 text-acid font-mono text-[10px] px-2 py-0.5 border border-acid/50 mb-2">
+                                SYS_ADMIN
+                            </div>
+                            <h3 class="text-2xl font-bold font-sans text-white mb-1 group-hover:text-acid transition-colors">Entity</h3>
+                            <p class="text-gray-400 text-sm font-sans">サーバー管理者</p>
+                        </div>
+                    </div>
+                    </a>
+                    
+                    <!-- 拡張用スロット -->
+                    <div class="glass-panel p-6 flex items-center justify-center gap-6 reveal-card opacity-50 border-dashed border-gray-700">
+                        <div class="text-center font-mono text-gray-500">
+                            <i class="ph ph-plus-circle text-3xl mb-2"></i>
+                            <p class="text-xs">EMPTY_SLOT_AVAILABLE</p>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+
+        <!-- ==========================================
+             JOIN SECTION: サーバー参加への導線
+             ========================================== -->
+        <section id="join" class="py-40 bg-black relative border-t-2 border-white overflow-hidden text-center">
+            <!-- 集中線エフェクト -->
+            <div class="absolute inset-0 z-0 opacity-20 pointer-events-none" style="background: repeating-conic-gradient(from 0deg, transparent 0deg 10deg, rgba(34, 211, 238, 0.1) 10deg 20deg);"></div>
+
+            <div class="container mx-auto px-6 relative z-10">
+                <span class="font-mono text-acid text-sm mb-4 block reveal-up">/// ACCESS_GRANTED</span>
+                <h2 class="text-5xl md:text-7xl font-sans font-black mb-6 reveal-up text-white">
+                    都市へ接続する
+                </h2>
+                <p class="text-gray-400 font-sans mb-12 max-w-2xl mx-auto reveal-up">
+                    未完の都市は、あなたの想像力と接続を待っています。市民権を取得し、新たな区画の開拓にご協力ください。
+                </p>
+
+                <!-- メインCTAボタン -->
+                <a href="https://discord.gg/86V2VXjwbM" target="_blank" class="inline-block group relative reveal-up hover-trigger">
+                    <div class="absolute -inset-1 bg-gradient-to-r from-acid via-neon to-acid rounded-sm blur opacity-70 group-hover:opacity-100 transition duration-200 animate-[gradient-x_3s_ease_infinite] bg-[length:200%_auto]"></div>
+                    <div class="relative bg-black px-12 py-6 border border-white/20 flex items-center justify-center gap-4 transition-transform transform group-hover:-translate-y-1">
+                        <i class="ph ph-discord-logo text-3xl text-white group-hover:text-[#5865F2] transition-colors"></i>
+                        <span class="font-bold font-sans text-xl tracking-widest text-white">JOIN SERVER</span>
+                    </div>
+                </a>
+            </div>
+        </section>
+
+        <!-- フッター -->
+        <footer class="py-8 bg-void border-t border-gray-900 text-center font-mono text-xs text-gray-600 relative z-10">
+            <p>SYSTEM TERMINAL v2.0</p>
+            <p class="mt-2">&copy; 2026 未完都市(νMSCV) Administration.</p>
+        </footer>
+    </main>
+
+    <script>
+        // カスタムアニメーション用のキーフレーム（Tailwind Config内で定義が難しいもの）
+        const style = document.createElement('style');
+        style.innerHTML = `
+            @keyframes scan {
+                0% { top: 0; opacity: 0; }
+                10% { opacity: 1; }
+                90% { opacity: 1; }
+                100% { top: 100%; opacity: 0; }
+            }
+            @keyframes gradient-x {
+                0%, 100% { background-position: 0% 50%; }
+                50% { background-position: 100% 50%; }
+            }
+        `;
+        document.head.appendChild(style);
+
+        // --- ターミナルカーソルの制御 ---
+        const cursor = document.getElementById('cursor');
+        const hoverTriggers = document.querySelectorAll('.hover-trigger, a, button');
+
+        document.addEventListener('mousemove', (e) => {
+            // カーソルを少し遅延させて追従させる（サイバー感の演出）
+            gsap.to(cursor, {
+                x: e.clientX,
+                y: e.clientY,
+                duration: 0.1,
+                ease: "power2.out"
+            });
+        });
+
+        hoverTriggers.forEach(trigger => {
+            trigger.addEventListener('mouseenter', () => cursor.classList.add('hovered'));
+            trigger.addEventListener('mouseleave', () => cursor.classList.remove('hovered'));
+        });
+
+        // --- GSAP アニメーション設定 ---
+        gsap.registerPlugin(ScrollTrigger, TextPlugin);
+
+        // 1. システム起動シーケンス（ヒーローエリア）
+        const tl = gsap.timeline();
+        
+        // テキストのスクランブルデコード演出
+        const scrambleElement = document.getElementById("scramble-text");
+        const targetText = "SYSTEM_ONLINE: ALL_MODULES_LOADED";
+        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()";
+        const proxy = { value: 0 };
+
+        tl.to(proxy, {
+            value: 1,
+            duration: 2,
+            ease: "none",
+            onUpdate: function() {
+                const progress = this.progress();
+                const len = targetText.length;
+                const revealed = Math.floor(progress * len);
+                let output = "";
+                
+                for(let i=0; i < len; i++) {
+                    if (i < revealed) {
+                        output += targetText[i];
+                    } else {
+                        output += chars[Math.floor(Math.random() * chars.length)];
+                    }
+                }
+                scrambleElement.innerText = output;
+            },
+            onComplete: () => {
+                scrambleElement.innerText = targetText;
+            }
+        })
+        // センターロゴの浮上
+        .from(".reveal-hero", {
+            duration: 1.5,
+            scale: 0.5,
+            opacity: 0,
+            rotationX: 45,
+            ease: "elastic.out(1, 0.5)"
+        }, "-=1")
+        // メインタイトルの出現
+        .from(".reveal-title", {
+            duration: 1,
+            y: 30,
+            opacity: 0,
+            ease: "power4.out"
+        }, "-=1")
+        // サブタイトルのフェードイン
+        .to(".reveal-hero-text", {
+            duration: 1,
+            opacity: 1,
+            y: 0,
+            ease: "power2.out"
+        }, "-=0.5");
+
+
+        // 2. スクロール連動モジュールの展開
+        const animateOnScroll = (selector, fromVars) => {
+            gsap.utils.toArray(selector).forEach(elem => {
+                gsap.from(elem, {
+                    scrollTrigger: {
+                        trigger: elem,
+                        start: "top 80%",
+                        toggleActions: "play none none reverse"
+                    },
+                    duration: 1.2,
+                    ease: "power3.out",
+                    ...fromVars
+                });
+            });
+        };
+
+        // 各種要素の出現方向定義
+        animateOnScroll('.reveal-up', { y: 60, opacity: 0 });
+        animateOnScroll('.reveal-left', { x: -80, opacity: 0 });
+        animateOnScroll('.reveal-right', { x: 80, opacity: 0 });
+        
+        // カード類のカスケード展開
+        gsap.utils.toArray('.reveal-card').forEach((elem, i) => {
+            gsap.from(elem, {
+                scrollTrigger: {
+                    trigger: elem,
+                    start: "top 85%",
+                },
+                y: 50,
+                opacity: 0,
+                duration: 0.8,
+                delay: i * 0.1, // 順番に出現させる
+                ease: "back.out(1.5)"
+            });
+        });
+
+    </script>
+</body>
+</html>
